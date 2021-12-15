@@ -32,7 +32,20 @@ def ula(
     n_steps: int,
     tau: float = 1e-2,
     n_burnin: int = 1000,
-):
+) -> torch.Tensor:
+    """Returns samples generated from the Unadjusted Langevin Algorithm.
+
+    Args:
+        log_data_grad: Function that computes the log-probability gradient
+            tensor (M,D) with respect to samples (M,D)
+        x0: Starting seed tensor (M,D) for the discrete Langevin process
+        n_steps: Number of steps to perform
+        n_burnin: Number of steps to consider burnin
+        tau: Step size
+
+    Returns:
+        samples: (N,M,D) tensor of samples.
+    """
     g = iterate_ula(log_data_grad, x0, tau=tau, n_burnin=n_burnin)
     samples = torch.stack(list(itertools.islice(g, n_steps)), 0)
     return samples
