@@ -103,7 +103,7 @@ def train(pi: Distribution):
     ds = DistributionDataset(pi)
     dl = DataLoader(ds, batch_size=128)
     trainer = pl.Trainer(
-        gpus=1, limit_train_batches=1000, max_epochs=1, checkpoint_callback=False
+        gpus=1, limit_train_batches=1000, max_epochs=1, enable_checkpointing=False
     )
     model = ScoreModel(n_input=2, n_hidden=64)
     trainer.fit(model, train_dataloaders=dl)
@@ -169,7 +169,7 @@ def main():
 
     x0 = torch.rand(5000, 2) * 6 - 3.0
     with torch.no_grad():
-        samples = ula(model, x0.cuda(), n_steps=10000, tau=1e-2, n_burnin=9999)
+        samples = ula(model, x0.cuda(), n_steps=10000, tau=1e-1, n_burnin=9999)
     samplesnp = samples[-1].detach().cpu().numpy()
     axs[1].hist2d(
         samplesnp[:, 0],
