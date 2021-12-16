@@ -1,15 +1,19 @@
 import torch
 from torch import autograd
+import pytorch_lightning as pl
 import torch.distributions as D
+from torch.distributions.distribution import Distribution
 import torch.nn
 import torch.nn.functional as F
 import torch.optim
+import torch.utils.data
 import matplotlib.pyplot as plt
 from torch.nn.modules.activation import ReLU
+from torch.utils.data.dataloader import DataLoader
 
 
 def create_gt_distribution():
-    mix = D.Categorical(torch.tensor([0.5, 0.5]))
+    mix = D.Categorical(torch.tensor([1 / 5, 4 / 5]))
     comp = D.MultivariateNormal(
         loc=torch.tensor([[-2.0, -2.0], [2.0, 2.0]]),
         covariance_matrix=torch.tensor(
@@ -21,47 +25,6 @@ def create_gt_distribution():
     )
     pi = D.MixtureSameFamily(mix, comp)
     return pi
-
-
-import torch
-from torch import autograd
-import torch.distributions as D
-import torch.nn
-import torch.nn.functional as F
-import torch.optim
-import matplotlib.pyplot as plt
-from torch.nn.modules.activation import ReLU
-
-
-def create_gt_distribution():
-    mix = D.Categorical(torch.tensor([0.5, 0.5]))
-    comp = D.MultivariateNormal(
-        loc=torch.tensor([[-2.0, -2.0], [2.0, 2.0]]),
-        covariance_matrix=torch.tensor(
-            [
-                [[1.0, 0.0], [0.0, 1.0]],
-                [[1.0, 0.0], [0.0, 1.0]],
-            ]
-        ),
-    )
-    pi = D.MixtureSameFamily(mix, comp)
-    return pi
-
-
-class ScoreFunctionModel(torch.nn.Module):
-    def __init__(self, n_hidden: int = 64, dropout: float = 0.05):
-        super().__init__()
-        self.w1 = torch.nn.Linear(2, n_hidden)
-        self.w2 = torch.nn.Linear(n_hidden, n_hidden)
-        self.w3 = torch.nn.Linear(n_hidden, 2)
-        self.dp1 = torch.nn.Dropout(dropout)
-        self.dp2 = torch.nn.Dropout(dropout)
-
-    def forward(self, x):
-        z = x / 3
-        z = self.dp1(F.softplus(self.w1(z)))
-        z = self.dp2(F.softplus(self.w2(z)))
-        return self.w3(z)
 
 
 def get_batch_jacobian(net, x, noutputs):
@@ -105,20 +68,58 @@ def score_matching_loss(score_model: torch.nn.Module, x: torch.Tensor) -> torch.
     return (tr + 0.5 * (y ** 2).sum(-1)).mean()
 
 
+class ScoreModel(pl.LightningModule):
+    def __init__(self, n_input: int = 2, n_hidden: int = 64):
+        super().__init__()
+        self.w1 = torch.nn.Linear(n_input, n_hidden)
+        self.w2 = torch.nn.Linear(n_hidden, n_hidden)
+        self.w3 = torch.nn.Linear(n_hidden, n_input)
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        x = F.softplus(self.w1(x))
+        x = F.softplus(self.w2(x))
+        return self.w3(x)
+
+    def training_step(self, batch, batch_idx):
+        x = batch
+        loss = score_matching_loss(self, x)
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=1e-3)
+
+
+class DistributionDataset(torch.utils.data.IterableDataset):
+    def __init__(self, pi: D.Distribution) -> None:
+        self.pi = pi
+
+    def __iter__(self):
+        while True:
+            yield self.pi.sample()
+
+
+def train(pi: Distribution):
+    ds = DistributionDataset(pi)
+    dl = DataLoader(ds, batch_size=128)
+    trainer = pl.Trainer(
+        gpus=1, limit_train_batches=1000, max_epochs=1, checkpoint_callback=False
+    )
+    model = ScoreModel(n_input=2, n_hidden=64)
+    trainer.fit(model, train_dataloaders=dl)
+    trainer.save_checkpoint("tmp/score_model.ckpt")
+    return model
+
+
+def load(path):
+    return ScoreModel.load_from_checkpoint(path)
+
+
 def main():
     pi = create_gt_distribution()
-    model = ScoreFunctionModel(n_hidden=128, dropout=0.0).cuda()
-
-    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
-    for e in range(1000):
-        samples = pi.sample((128,)).cuda()
-        samples = samples  # ca. [-1, 1]
-        opt.zero_grad()
-        loss = score_matching_loss(model, samples)
-        loss.backward()
-        opt.step()
-        if e % 100 == 0:
-            print(loss.item())
+    model = train(pi)
+    model = load("tmp/score_model.ckpt")
+    model = model.cuda().eval()
 
     fig, axs = plt.subplots(1, 2)
     N = 20
@@ -145,13 +146,56 @@ def main():
         alpha=0.8,
     )
     with torch.no_grad():
+        model = model.cuda().eval()
         S_pred = model(UV.view(-1, 2).cuda()).view(N, N, 2).cpu()
-    axs[1].quiver(X, Y, S_pred[..., 0], S_pred[..., 1], color=(1, 1, 1, 1))
+    axs[1].quiver(
+        X,
+        Y,
+        S_pred[..., 0],
+        S_pred[..., 1],
+        color=(1, 1, 1, 1),
+    )
 
     axs[1].set_aspect("equal", adjustable="box")
     axs[1].set_xlim([-3, 3])
     axs[1].set_ylim([-3, 3])
 
+    plt.show()
+
+    # ------------------------------------------------------
+
+    fig, axs = plt.subplots(1, 2)
+    from ..langevin import ula
+
+    x0 = torch.rand(5000, 2) * 6 - 3.0
+    with torch.no_grad():
+        samples = ula(model, x0.cuda(), n_steps=10000, tau=1e-2, n_burnin=9999)
+    samplesnp = samples[-1].detach().cpu().numpy()
+    axs[1].hist2d(
+        samplesnp[:, 0],
+        samplesnp[:, 1],
+        cmap="viridis",
+        rasterized=False,
+        bins=128,
+        alpha=0.8,
+    )
+    axs[1].set_aspect("equal", adjustable="box")
+    axs[1].set_xlim([-3, 3])
+    axs[1].set_ylim([-3, 3])
+
+    samples = pi.sample((5000,))
+    samplesnp = samples.cpu().numpy()
+    axs[0].hist2d(
+        samplesnp[:, 0],
+        samplesnp[:, 1],
+        cmap="viridis",
+        rasterized=False,
+        bins=128,
+        alpha=0.8,
+    )
+    axs[0].set_aspect("equal", adjustable="box")
+    axs[0].set_xlim([-3, 3])
+    axs[0].set_ylim([-3, 3])
     plt.show()
 
 

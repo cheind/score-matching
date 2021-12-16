@@ -17,10 +17,11 @@ def iterate_ula(
     tau = torch.as_tensor(tau)
     sqrt_2tau = torch.sqrt(2 * tau)
 
+    eps = torch.empty_like(x0)
     for i in itertools.count(0):
         if i > n_burnin:
             yield x.detach()
-        eps = torch.empty_like(x0).normal_(mean=0.0, std=1.0)
+        eps.normal_(mean=0.0, std=1.0)
         x = x + tau * log_data_grad(x) + sqrt_2tau * eps
 
     del x.grad
