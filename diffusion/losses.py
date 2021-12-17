@@ -3,7 +3,7 @@ import torch.nn
 import torch.nn.functional as F
 import warnings
 
-from .types import DataScoreModel
+from .types import DataScoreModel, ScoreMatchingLoss
 from . import jacobians
 
 
@@ -38,15 +38,11 @@ def dsm_loss(
 
     The smaller sigma, the larger the gradients since q peaks more rapidly.
     """
+
     xn = x + torch.randn_like(x) * sigma
     targets = (1 / sigma ** 2) * (x - xn)  # \nabla_y log q(y|x)
     scores = score_model(xn)
     return 0.5 * ((scores - targets) ** 2).sum(dim=-1).mean(dim=0)
-
-
-class ScoreMatchingLoss(torch.nn.Module):
-    def forward(self, score_model: DataScoreModel, x: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
 
 
 class ISMLoss(ScoreMatchingLoss):
