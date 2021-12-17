@@ -10,7 +10,7 @@ import torch.utils.data
 from torch.distributions.distribution import Distribution
 from torch.utils.data.dataloader import DataLoader
 
-from .. import losses, models, utils
+from .. import losses, models, utils, normalizers
 
 
 def create_gt_distribution():
@@ -43,7 +43,15 @@ def train(pi: Distribution):
     trainer = pl.Trainer(
         gpus=1, limit_train_batches=1000, max_epochs=1, enable_checkpointing=False
     )
-    model = models.ToyScoreModel(loss=losses.ISMLoss(), n_input=2, n_hidden=64)
+    model = models.ToyScoreModel(
+        loss=losses.ISMLoss(enable_fast=True),
+        n_input=2,
+        n_hidden=128,
+        n_hidden_layers=2,
+        activation=torch.nn.Softplus,
+        batch_norm=False,
+        lr=1e-3,
+    )
     trainer.fit(model, train_dataloaders=dl)
     trainer.save_checkpoint("tmp/score_model.ckpt")
     return model
@@ -117,7 +125,7 @@ def main():
     from ..langevin import ula
 
     x0 = torch.rand(5000, 2) * 6 - 3.0
-    n_steps = 20000
+    n_steps = 10000
     with torch.no_grad():
         samples = ula(model, x0.cuda(), n_steps=n_steps, tau=1e-2, n_burnin=n_steps - 1)
     samplesnp = samples[-1].detach().cpu().numpy()
