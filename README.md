@@ -42,3 +42,6 @@
 }
 
 ```
+
+Additional
+https://courses.cs.washington.edu/courses/cse599i/20au/resources/L17_denoising.pdf
