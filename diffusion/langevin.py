@@ -10,6 +10,7 @@ def iterate_ula(
     x0: torch.Tensor,
     tau: float = 1e-2,
     n_burnin: int = 1000,
+    max_score: float = 5.0,
 ) -> Iterator[torch.Tensor]:
     """Generates samples using the Unadjusted Langevin Algorithm (ULA).
 
@@ -24,7 +25,11 @@ def iterate_ula(
         if i > n_burnin:
             yield x.detach()
         eps.normal_(mean=0.0, std=1.0)
-        x = x + tau * score_model(x) + sqrt_2tau * eps
+        x = (
+            x
+            + tau * torch.clamp(score_model(x), -max_score, max_score)
+            + sqrt_2tau * eps
+        )
 
     del x.grad
 
