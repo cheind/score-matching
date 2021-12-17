@@ -1,6 +1,7 @@
 import torch
 import torch.nn
 import torch.nn.functional as F
+import warnings
 
 from .types import DataScoreModel
 from . import jacobians
@@ -53,6 +54,13 @@ class ISMLoss(ScoreMatchingLoss):
         super().__init__()
         if enable_fast:
             self.fn = ism_loss_fast
+            warnings.warn(
+                (
+                    "Fast Jacobian computation mode takes more memory"
+                    " and is not compatible with every torch.nn.Module except for"
+                    " the simplest ones."
+                )
+            )
         else:
             self.fn = ism_loss
 
