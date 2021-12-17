@@ -10,7 +10,7 @@ import torch.utils.data
 from torch.distributions.distribution import Distribution
 from torch.utils.data.dataloader import DataLoader
 
-from .. import losses, models, types
+from .. import losses, models, utils
 
 
 def create_gt_distribution():
@@ -51,55 +51,6 @@ def train(pi: Distribution):
 
 def load(path):
     return models.ToyScoreModel.load_from_checkpoint(path)
-
-
-def scores_rect2d(
-    score_model: types.DataScoreModel,
-    xlim: tuple[int, int],
-    ylim: tuple[int, int],
-    n_x: int,
-    n_y: int,
-    device: torch.device = None,
-) -> torch.Tensor:
-    X = torch.linspace(xlim[0], xlim[1], n_x, device=device)
-    Y = torch.linspace(ylim[0], ylim[1], n_y, device=device)
-    U, V = torch.meshgrid(Y, X)
-    UV = torch.stack((V, U), -1)
-    scores = score_model(UV.view(-1, 2)).view(n_y, n_x, 2)
-    return scores  # NxMx2
-
-
-@torch.no_grad()
-def integrate_scores_rect2d(
-    scores: Union[torch.Tensor, types.DataScoreModel],
-    xlim: tuple[int, int],
-    ylim: tuple[int, int],
-    n_x: int,
-    n_y: int,
-    c: float = 0.0,
-    device: torch.device = None,
-) -> torch.tensor:
-
-    if not torch.is_tensor(scores):
-        scores = scores_rect2d(scores, xlim, ylim, n_x, n_y, device)
-
-    # uses direct gradient approximation. hope that u is conservative field.
-
-    u = scores.new_zeros((n_y, n_x))
-    hx = (xlim[1] - xlim[0]) / (n_x - 1)
-    hy = (ylim[1] - ylim[0]) / (n_y - 1)
-
-    tx = 0.5 * (scores[:, 1:, 0] + scores[:, :-1, 0]) * hx
-    ty = 0.5 * (scores[1:, :, 1] + scores[:-1, :, 1]) * hy
-
-    # seed
-    u[0, 0] = c
-    for ix in range(n_x):
-        if ix > 0:
-            u[0, ix] = tx[0, ix - 1] + u[0, ix - 1]
-        for iy in range(1, n_y):
-            u[iy, ix] = ty[iy - 1, ix] + u[iy - 1, ix]
-    return u
 
 
 def main():
@@ -199,7 +150,7 @@ def main():
 
     # -----------------------------------------------------
     fig, axs = plt.subplots(1, 3)
-    u = integrate_scores_rect2d(
+    u = utils.integrate_scores_rect2d(
         model,
         (-3, 3),
         (-3, 3),
@@ -233,7 +184,7 @@ def main():
     scores_gt = torch.autograd.grad(pi.log_prob(x).sum(), x)[0]
     scores_gt = scores_gt.view(N, N, 2)
 
-    u_gt_int = integrate_scores_rect2d(
+    u_gt_int = utils.integrate_scores_rect2d(
         scores_gt,
         (-3, 3),
         (-3, 3),
