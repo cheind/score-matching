@@ -2,9 +2,11 @@ from typing import Iterator, Callable
 import itertools
 import torch
 
+from .types import DataScoreModel
+
 
 def iterate_ula(
-    log_data_grad: Callable[[torch.Tensor], torch.Tensor],
+    score_model: DataScoreModel,
     x0: torch.Tensor,
     tau: float = 1e-2,
     n_burnin: int = 1000,
@@ -22,17 +24,17 @@ def iterate_ula(
         if i > n_burnin:
             yield x.detach()
         eps.normal_(mean=0.0, std=1.0)
-        x = x + tau * log_data_grad(x) + sqrt_2tau * eps
+        x = x + tau * score_model(x) + sqrt_2tau * eps
 
     del x.grad
 
 
 def ula(
-    log_data_grad: Callable[[torch.Tensor], torch.Tensor],
+    score_model: DataScoreModel,
     x0: torch.Tensor,
     n_steps: int,
-    tau: float = 1e-2,
     n_burnin: int = 1000,
+    tau: float = 1e-2,
 ) -> torch.Tensor:
     """Returns samples generated from the Unadjusted Langevin Algorithm.
 
@@ -47,6 +49,6 @@ def ula(
     Returns:
         samples: (N,M,D) tensor of samples.
     """
-    g = iterate_ula(log_data_grad, x0, tau=tau, n_burnin=n_burnin)
+    g = iterate_ula(score_model, x0, tau=tau, n_burnin=n_burnin)
     samples = torch.stack(list(itertools.islice(g, n_steps)), 0)
     return samples
