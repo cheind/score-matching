@@ -53,7 +53,7 @@ def load(path):
 
 def main():
     pi = create_gt_distribution()
-    # model = train(pi)
+    model = train(pi)
     model = load("tmp/score_model.ckpt")
     model = model.cuda().eval()
 
