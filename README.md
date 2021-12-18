@@ -45,3 +45,5 @@
 
 Additional
 https://courses.cs.washington.edu/courses/cse599i/20au/resources/L17_denoising.pdf
+How to Train Your Energy-Based Models
+https://arxiv.org/pdf/2101.03288.pdf
