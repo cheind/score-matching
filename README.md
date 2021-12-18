@@ -47,3 +47,5 @@ Additional
 https://courses.cs.washington.edu/courses/cse599i/20au/resources/L17_denoising.pdf
 How to Train Your Energy-Based Models
 https://arxiv.org/pdf/2101.03288.pdf
+A Low Rank Approach to Automatic Differentiation
+https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.161.7201&rep=rep1&type=pdf
