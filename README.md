@@ -51,3 +51,4 @@ A Low Rank Approach to Automatic Differentiation
 https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.161.7201&rep=rep1&type=pdf
 Sliced Score Matching
 https://arxiv.org/pdf/1905.07088.pdf
+https://arxiv.org/pdf/2101.09258.pdf
