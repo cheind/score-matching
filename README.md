@@ -1,5 +1,9 @@
 # diffusion-models
 
+The aim of *diffusion-models* is to trace the history and evolution of diffusion models for sampling from a data distribution. The resulting content will feature theory and toy examples written in Python/PyTorch. Expect something along the lines of my [autoregressive repository](https://github.com/cheind/autoregressive).
+
+ However, currently this package is not meant to be used by anyone than myself, because code is frequently changing and lacking documentation.
+
 ## References
 
 ```bibtex
