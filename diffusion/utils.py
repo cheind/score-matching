@@ -1,7 +1,26 @@
+import dataclasses
 from typing import Union
+
 import torch
 
 from . import types
+
+
+@dataclasses.dataclass
+class Rect2dCoords:
+    xlim: tuple[int, int]
+    ylim: tuple[int, int]
+    n_x: int
+    n_y: int
+    X: torch.Tensor = dataclasses.field(init=False)
+    Y: torch.Tensor = dataclasses.field(init=False)
+    XY: torch.Tensor = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        self.X = torch.linspace(self.xlim[0], self.xlim[1], self.n_x)
+        self.Y = torch.linspace(self.ylim[0], self.ylim[1], self.n_y)
+        U, V = torch.meshgrid(self.Y, self.X)
+        self.XY = torch.stack((V, U), -1)
 
 
 def scores_rect2d(
