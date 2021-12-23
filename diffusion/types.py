@@ -7,6 +7,10 @@ DataScoreModel = Callable[[torch.Tensor], torch.Tensor]
 """Signature to evaluate the score function `\nabla_x \log p(x)` 
 with respect to the data."""
 
+ConditionalDataScoreModel = Callable[[torch.Tensor, torch.LongTensor], torch.Tensor]
+"""Signature to evaluate the score function `\nabla_x \log p(x|c)` 
+with respect to the data given condition c."""
+
 
 class DataNormalizer(torch.nn.Module):
     """Pre-normalize data before any other feature transform."""

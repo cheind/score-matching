@@ -1,8 +1,9 @@
 from typing import Iterator, Callable
 import itertools
 import torch
+from functools import partial
 
-from .types import DataScoreModel
+from .types import DataScoreModel, ConditionalDataScoreModel
 
 
 def iterate_ula(
@@ -38,8 +39,9 @@ def ula(
     score_model: DataScoreModel,
     x0: torch.Tensor,
     n_steps: int,
-    n_burnin: int = 1000,
+    n_burnin: int = 0,
     tau: float = 1e-2,
+    max_score: float = 5.0,
 ) -> torch.Tensor:
     """Returns samples generated from the Unadjusted Langevin Algorithm.
 
@@ -54,6 +56,36 @@ def ula(
     Returns:
         samples: (N,M,D) tensor of samples.
     """
-    g = iterate_ula(score_model, x0, tau=tau, n_burnin=n_burnin)
+    g = iterate_ula(score_model, x0, tau=tau, n_burnin=n_burnin, max_score=max_score)
     samples = torch.stack(list(itertools.islice(g, n_steps)), 0)
     return samples
+
+
+def annealed_ula(
+    score_model: ConditionalDataScoreModel,
+    x0: torch.Tensor,
+    sigmae: torch.Tensor,
+    n_steps: int,
+    tau: float = 1e-2,
+    max_score: float = 5.0,
+):
+    x = x0
+    x = x.unsqueeze(0)  # (1,M,D)
+    L = len(sigmae)
+    steps_per_level = torch.tensor([n_steps // L] * L)
+    steps_per_level[-1] += n_steps % L
+    print(steps_per_level)
+    for level in range(len(sigmae)):
+        tau_level = tau * sigmae[level] / sigmae[-1]
+        steps_level = steps_per_level[level]
+        cond = torch.tensor([level]).to(x0.device)
+        sm = partial(score_model, c=cond)
+        x = ula(
+            sm,
+            x[-1],
+            n_steps=steps_level,
+            n_burnin=0,
+            tau=tau_level,
+            max_score=max_score,
+        )
+    return x

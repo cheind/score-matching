@@ -3,7 +3,7 @@ import torch.nn
 import torch.nn.functional as F
 import warnings
 
-from .types import DataScoreModel, ScoreMatchingLoss
+from .types import DataScoreModel, ScoreMatchingLoss, ConditionalDataScoreModel
 from . import jacobians
 
 
@@ -45,6 +45,19 @@ def dsm_loss(
     return 0.5 * ((scores - targets) ** 2).sum(dim=-1).mean(dim=0)
 
 
+def ncsm_loss(
+    score_model: ConditionalDataScoreModel, x: torch.Tensor, sigmae: torch.Tensor
+) -> torch.Tensor:
+    ids = torch.randint(0, sigmae.shape[0], size=(x.shape[0],)).to(x.device)  # (B,)
+    chosen_sigma = sigmae[ids].unsqueeze(-1)  # (B,1)
+    xn = x + torch.randn_like(x) * chosen_sigma  # (B,D)
+    targets = (1 / (chosen_sigma ** 2)) * (x - xn)  # (B,D)
+    scores = score_model(xn, ids)  # (B,D)
+    losses = 0.5 * ((scores - targets) ** 2).sum(dim=-1)  # (B,)
+    lambd = (chosen_sigma ** 2).squeeze(-1)  # (B,)
+    return (losses * lambd).mean()
+
+
 class ISMLoss(ScoreMatchingLoss):
     def __init__(self, enable_fast: bool = True) -> None:
         super().__init__()
@@ -71,3 +84,12 @@ class DSMLoss(ScoreMatchingLoss):
 
     def forward(self, score_model: DataScoreModel, x: torch.Tensor) -> torch.Tensor:
         return dsm_loss(score_model, x, sigma=self.sigma)
+
+
+class NCSMLoss(ScoreMatchingLoss):
+    def __init__(self, sigmae: torch.Tensor):
+        super().__init__()
+        self.register_buffer("sigmae", sigmae)
+
+    def forward(self, score_model: DataScoreModel, x: torch.Tensor) -> torch.Tensor:
+        return ncsm_loss(score_model, x, self.sigmae)
