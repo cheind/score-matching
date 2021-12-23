@@ -125,7 +125,7 @@ def main():
     from ..langevin import ula
 
     x0 = torch.rand(5000, 2) * 20 - 10.0
-    n_steps = 10000
+    n_steps = 1000
     with torch.no_grad():
         samples = ula(model, x0.cuda(), n_steps=n_steps, tau=1e-2, n_burnin=n_steps - 1)
     samplesnp = samples[-1].detach().cpu().numpy()

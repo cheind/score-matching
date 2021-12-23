@@ -145,7 +145,7 @@ def main():
     from ..langevin import ula, annealed_ula
 
     x0 = torch.rand(5000, 2) * 20 - 10.0
-    n_steps = 10000
+    n_steps = 1000
     with torch.no_grad():
         samples = annealed_ula(
             model, x0.cuda(), model.loss_fn.sigmae, n_steps=n_steps, tau=1e-2
