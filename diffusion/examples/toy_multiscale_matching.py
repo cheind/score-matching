@@ -102,7 +102,7 @@ def main():
     model: models.ConditionalToyScoreModel = model.cuda().eval()
 
     num_levels = len(model.loss_fn.sigmae)
-    fig = plt.figure(figsize=(20, 20), dpi=50)
+    fig = plt.figure(figsize=(8, 8*5//3), dpi=70)
     spec = gridspec.GridSpec(
         ncols=3,
         nrows=5,
