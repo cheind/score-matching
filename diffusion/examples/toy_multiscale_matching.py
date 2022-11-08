@@ -1,6 +1,7 @@
 from typing import Union
 
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import pytorch_lightning as pl
 import torch
 import torch.distributions as D
@@ -52,7 +53,7 @@ def train(pi: Distribution):
     ds = DistributionDataset(pi)
     dl = DataLoader(ds, batch_size=512)
     trainer = pl.Trainer(
-        gpus=1, limit_train_batches=10000, max_epochs=1, enable_checkpointing=False
+        gpus=1, limit_train_batches=1000, max_epochs=1, enable_checkpointing=False
     )
     # geometric series sigmae
     s_start = 2
@@ -79,63 +80,76 @@ def load(path):
     return models.ConditionalToyScoreModel.load_from_checkpoint(path)
 
 
+def plot_scores(ax, X,Y,S):
+    ax.quiver(
+        X,
+        Y,
+        S[..., 0],
+        S[..., 1],
+        angles="xy",
+        scale_units="xy",
+        scale=1.0
+    )
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim([-10, 10])
+    ax.set_ylim([-10, 10])
+
+
 def main():
     pi = create_gt_distribution()
-    # model = train(pi)
+    model = train(pi)
     model = load("tmp/cond_score_model.ckpt")
     model: models.ConditionalToyScoreModel = model.cuda().eval()
 
-    # fig, axs = plt.subplots(1, 2)
-    # N = 20
-    # X = torch.linspace(-3, 3, N)
-    # Y = torch.linspace(-3, 3, N)
-    # U, V = torch.meshgrid(X, Y)
-    # UV = torch.stack((V, U), -1)
-    # x = UV.view(-1, 2).requires_grad_()
-    # S_gt = torch.autograd.grad(pi.log_prob(x).sum(), x)[0]
-    # S_gt = S_gt.view(N, N, 2)
-    # print(S_gt[-1, -1])
-    # axs[0].quiver(
-    #     X,
-    #     Y,
-    #     S_gt[..., 0],
-    #     S_gt[..., 1],
-    #     angles="xy",
-    #     scale_units="xy",
-    # )
-    # axs[0].set_aspect("equal", adjustable="box")
-    # axs[0].set_xlim([-10, 10])
-    # axs[0].set_ylim([-10, 10])
+    num_levels = len(model.loss_fn.sigmae)
+    fig = plt.figure(figsize=(20, 20), dpi=50)
+    spec = gridspec.GridSpec(
+        ncols=3,
+        nrows=5,
+        figure=fig,
+        hspace=0.25,
+    )
 
-    # # Average score lengths
-    # with torch.no_grad():
-    #     for i in range(model.n_cond):
-    #         scores = model(
-    #             UV.view(-1, 2).cuda(), torch.tensor([i]).repeat(N * N).cuda()
-    #         )
-    #         print(torch.norm(scores, p=2, dim=-1).mean())
+    N = 20
+    X = torch.linspace(-10, 10, N)
+    Y = torch.linspace(-10, 10, N)
+    U, V = torch.meshgrid(X, Y)
+    UV = torch.stack((V, U), -1)
+    x = UV.view(-1, 2).requires_grad_()
+    S_gt = torch.autograd.grad(pi.log_prob(x).sum(), x)[0]
+    S_gt = S_gt.view(N, N, 2)
 
-    # with torch.no_grad():
-    #     model = model.cuda().eval()
-    #     S_pred = (
-    #         model(UV.view(-1, 2).cuda(), torch.tensor([9]).repeat(N * N).cuda())
-    #         .view(N, N, 2)
-    #         .cpu()
-    #     )
-    # print(S_pred[-1, -1])
-    # axs[1].quiver(
-    #     X,
-    #     Y,
-    #     S_pred[..., 0],
-    #     S_pred[..., 1],
-    #     # color=(1, 1, 1, 1),
-    #     angles="xy",
-    #     scale_units="xy",
-    # )
+    ax = fig.add_subplot(spec[0, 1])
+    scale = 1e-1
+    plot_scores(ax, X,Y,S_gt*scale)
+    ax.set_title(f'Ground-truth $\\tau$={scale:.3f}')
 
-    # axs[1].set_aspect("equal", adjustable="box")
-    # axs[1].set_xlim([-10, 10])
-    # axs[1].set_ylim([-10, 10])
+    # Average score lengths
+    with torch.no_grad():
+        for i in range(model.n_cond):
+            scores = model(
+                UV.view(-1, 2).cuda(), torch.tensor([i]).repeat(N * N).cuda()
+            )
+            print(torch.norm(scores, p=2, dim=-1).mean())
+
+    with torch.no_grad():        
+        model = model.cuda().eval()
+        
+        for level in range(num_levels):
+            S_pred = (
+                model(UV.view(-1, 2).cuda(), torch.tensor([level]).repeat(N * N).cuda())
+                .view(N, N, 2)
+                .cpu()
+            )
+            tau = 1e-2
+            scale = tau * model.loss_fn.sigmae[level] /model.loss_fn.sigmae[-1]
+            S_pred *= scale.item()
+            ax = fig.add_subplot(spec[1+level//3, level%3])
+            plot_scores(ax, X,Y,S_pred)
+            ax.set_title(f'Level {level}, $\\tau$={scale:.3f}')
+
+    fig.tight_layout()
+    
 
     # plt.show()
 
